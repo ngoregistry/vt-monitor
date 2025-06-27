@@ -4,7 +4,14 @@ import json
 import urllib.request
 import urllib.parse
 from datetime import datetime
-from settings import API_KEY, API_URL_IP, API_URL_DOMAIN
+
+# Configuration - try to import from settings, fallback to environment variables
+try:
+    from settings import API_KEY, API_URL_IP, API_URL_DOMAIN
+except ImportError:
+    API_KEY = os.getenv('VT_API_KEY', '')
+    API_URL_IP = 'https://www.virustotal.com/api/v3/ip_addresses/'
+    API_URL_DOMAIN = 'https://www.virustotal.com/api/v3/domains/'
 
 def fetch_data(url):
     request = urllib.request.Request(url, headers={'x-apikey': API_KEY})

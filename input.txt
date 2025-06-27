@@ -1,2 +1,0 @@
-# Add your IP and/or domain list here (one IP/domain per line)
-8.8.8.8

@@ -3,12 +3,14 @@ import os
 from includes.single_ip import display_ip_info
 from includes.single_domain import display_domain_info
 from includes.ip_domain_list import process_ip_or_domain_list
+from includes.subdomain_analysis import analyze_subdomains
 
 # Ensure the output directories exist
 def ensure_directories():
     os.makedirs('output/single-ip', exist_ok=True)
     os.makedirs('output/single-domain', exist_ok=True)
     os.makedirs('output/domain-ip-lists', exist_ok=True)
+    os.makedirs('output/subdomain-analysis', exist_ok=True)
 
 def main():
     ensure_directories()
@@ -19,7 +21,8 @@ def main():
         print("1. Single IP Address: All info of a single IP")
         print("2. Single Domain: All info of a single domain")
         print("3. IP/Domain List: reputation score, country, Stats for each IP/Domain in the list")
-        print("4. Exit")
+        print("4. Subdomain Analysis: Find and analyze subdomains for malicious/suspicious activity")
+        print("5. Exit")
         print("----------------\n")
         choice = input("Enter your choice: ")
 
@@ -33,6 +36,9 @@ def main():
             file_path = input("Type the input file (Example: input.txt): ")
             process_ip_or_domain_list(file_path)
         elif choice == "4":
+            domain = input("Enter domain to analyze subdomains: ")
+            analyze_subdomains(domain)
+        elif choice == "5":
             sys.exit(0)
         else:
             print("Invalid choice. Please try again.")

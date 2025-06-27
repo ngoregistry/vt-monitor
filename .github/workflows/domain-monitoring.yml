@@ -1,0 +1,157 @@
+name: Domain Security Monitoring
+
+on:
+  schedule:
+    # Run every Monday at 8:00 AM UTC (adjust as needed)
+    - cron: "0 8 * * 1"
+
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  domain-security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run domain security monitoring
+        id: security-scan
+        continue-on-error: true
+        env:
+          # VirusTotal API Configuration
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+
+          # Email/SMTP Configuration
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+
+          # Email Settings
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }} # Comma-separated list: "admin@company.com,security@company.com"
+          EMAIL_SUBJECT: ${{ secrets.EMAIL_SUBJECT || 'Domain Security Report - {date}' }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO || 'noreply@company.com' }}
+
+          # Organization Settings
+          COMPANY_NAME: ${{ secrets.COMPANY_NAME || 'Security Team' }}
+          REPORT_TITLE: ${{ secrets.REPORT_TITLE || 'Automated Domain Security Report' }}
+
+        run: |
+          set +e  # Don't exit immediately on error
+          python suffix_report.py
+          EXIT_CODE=$?
+          echo "SCAN_EXIT_CODE=$EXIT_CODE" >> $GITHUB_ENV
+          if [ $EXIT_CODE -eq 2 ]; then
+            echo "MALICIOUS_THREATS_DETECTED=true" >> $GITHUB_ENV
+            echo "🚨 Malicious threats detected - will create security alert"
+            exit 2
+          elif [ $EXIT_CODE -eq 1 ]; then
+            echo "SCRIPT_ERROR=true" >> $GITHUB_ENV
+            echo "❌ Script error occurred"
+            exit 1
+          else
+            echo "✅ Scan completed successfully with no threats"
+            exit 0
+          fi
+
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        if: always() # Upload even if the scan fails
+        with:
+          name: domain-security-reports
+          path: output/automated-reports/
+          retention-days: 30
+
+      # Create an issue ONLY when malicious threats are detected (exit code 2)
+      - name: Create GitHub Issue on Malicious Threats
+        if: env.MALICIOUS_THREATS_DETECTED == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Malicious Threats Detected in Domain Security Scan',
+              body: `
+              ## 🚨 SECURITY ALERT: Malicious Threats Detected
+              
+              The automated domain security monitoring has detected **malicious threats** in the monitored domains.
+              
+              **Timestamp:** ${new Date().toISOString()}
+              **Workflow:** ${context.workflow}
+              **Run ID:** ${context.runId}
+              **Workflow URL:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+              
+              ### ⚠️ Immediate Action Required
+              
+              1. **Review the detailed email report** for specific malicious domains/subdomains
+              2. **Check the workflow logs** for detailed scan results
+              3. **Download the report artifacts** from the workflow run
+              4. **Investigate flagged domains** and take immediate action
+              5. **Implement security measures** to mitigate threats
+              6. **Close this issue** once threats are resolved
+              
+              ### 📊 Analysis Details
+              
+              Check the workflow artifacts and email report for:
+              - List of malicious domains/subdomains
+              - VirusTotal detection details
+              - Reputation scores and threat indicators
+              
+              **This alert was automatically generated because malicious threats were detected during the security scan.**
+              `,
+              labels: ['security', 'malicious-threat', 'urgent', 'automated']
+            })
+
+      # Create a different issue for general script failures (exit code 1) - OPTIONAL
+      - name: Create GitHub Issue on Script Failure
+        if: env.SCRIPT_ERROR == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Domain Security Monitoring Script Failure',
+              body: `
+              ## Script Execution Failure
+              
+              The automated domain security monitoring script encountered an error during execution.
+              
+              **Timestamp:** ${new Date().toISOString()}
+              **Workflow:** ${context.workflow}
+              **Run ID:** ${context.runId}
+              **Workflow URL:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+              
+              ### Possible Causes
+              
+              - Configuration issues (missing API keys, invalid settings)
+              - Network connectivity problems
+              - VirusTotal API rate limiting or errors
+              - Missing dependencies or environment issues
+              
+              ### Next Steps
+              
+              1. Check the workflow logs for error details
+              2. Verify repository secrets and configuration
+              3. Ensure VirusTotal API key is valid and has sufficient quota
+              4. Review the suffix.txt file for valid domain entries
+              5. Close this issue once the problem is resolved
+              
+              **Note:** This was a script execution error, not a security threat detection.
+              `,
+              labels: ['script-failure', 'automated', 'maintenance']
+            })
